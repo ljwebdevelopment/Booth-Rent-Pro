@@ -1,9 +1,4 @@
 const state = {
-  currentUser: null,
-  authReady: false,
-  authViewMode: 'signin', // "signin" | "signup"
-  authLoading: false,
-  authError: '',
   selectedRenterId: null,
   drawerOpen: false,
   paymentMethod: '',

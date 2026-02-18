@@ -283,7 +283,7 @@ textarea {
   resize: vertical;
 }
 
-/* Custom dropdown */
+/* custom dropdown */
 .dropdown {
   position: relative;
 }
@@ -327,67 +327,6 @@ textarea {
 
 .dropdown-option:last-child {
   border-bottom: 0;
-}
-
-/* Auth view */
-.auth-view {
-  min-height: 100vh;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: var(--space-6);
-  background: var(--bg-app);
-}
-
-.auth-card {
-  width: min(520px, 100%);
-  background: #fff;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
-  padding: var(--space-5);
-}
-
-.auth-title {
-  margin-top: 0;
-  margin-bottom: var(--space-4);
-}
-
-.auth-tabs {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-2);
-  margin-bottom: var(--space-4);
-}
-
-.auth-tab {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 0.6rem;
-  background: #fff;
-  cursor: pointer;
-}
-
-.auth-tab.active {
-  background: var(--primary);
-  color: #fff;
-  border-color: var(--primary);
-}
-
-.auth-error {
-  color: var(--danger);
-  margin: 0 0 var(--space-3);
-  font-size: 0.9rem;
-}
-
-.auth-switch {
-  margin-top: var(--space-3);
-  background: none;
-  border: 0;
-  color: var(--primary);
-  padding: 0;
-  text-decoration: underline;
-  cursor: pointer;
 }
 
 .hidden {

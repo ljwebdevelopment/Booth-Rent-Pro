@@ -1,9 +1,10 @@
 import { appConfig } from './appConfig.js';
-import { listenToAuthChanges, signInUser, signOutUser, signUpUser } from './auth.js';
+import { initializeFirebase } from './firebase-init.js';
 import { createRenterCard } from './components/renterCard.js';
 import { renderDrawer } from './components/drawer.js';
 import { getState, setState, subscribe } from './uiStore.js';
-import { renderAuthView } from './views/authView.js';
+
+initializeFirebase();
 
 const renters = [
   {
@@ -74,27 +75,15 @@ const renterPayments = {
   }
 };
 
-const authViewEl = document.getElementById('auth-view');
-const dashboardViewEl = document.getElementById('dashboard-view');
 const renterListEl = document.getElementById('renter-list');
 const searchInputEl = document.getElementById('search-input');
 const drawerRoot = document.getElementById('drawer-root');
 const menuToggle = document.getElementById('menu-toggle');
 const menuPopover = document.getElementById('menu-popover');
 const panelButtons = document.querySelectorAll('[data-panel]');
-const logoutButton = document.getElementById('logout-button');
 
 menuToggle?.addEventListener('click', () => {
   menuPopover.classList.toggle('hidden');
-});
-
-logoutButton?.addEventListener('click', async () => {
-  try {
-    await signOutUser();
-    menuPopover.classList.add('hidden');
-  } catch (error) {
-    setState({ authError: error.message });
-  }
 });
 
 document.addEventListener('click', (event) => {
@@ -112,78 +101,23 @@ panelButtons.forEach((button) => {
   });
 });
 
-searchInputEl?.addEventListener('input', renderRenters);
+searchInputEl?.addEventListener('input', () => renderRenters());
 
 subscribe(() => {
-  const state = getState();
-  renderByAuthState(state);
+  const { drawerOpen, selectedRenterId } = getState();
 
-  if (!state.currentUser || !state.drawerOpen || !state.selectedRenterId) {
+  if (!drawerOpen || !selectedRenterId) {
     drawerRoot.innerHTML = '';
     return;
   }
 
-  const selectedRenter = renters.find((renter) => renter.id === state.selectedRenterId);
+  const selectedRenter = renters.find((renter) => renter.id === selectedRenterId);
   if (!selectedRenter) return;
 
   renderDrawer(drawerRoot, selectedRenter, renterPayments[selectedRenter.id] || {});
 });
 
-listenToAuthChanges((user) => {
-  setState({
-    currentUser: user,
-    authReady: true,
-    authLoading: false,
-    authError: '',
-    drawerOpen: false,
-    selectedRenterId: null
-  });
-});
-
-function renderByAuthState(state) {
-  if (!state.authReady) {
-    authViewEl.innerHTML = '';
-    dashboardViewEl.classList.add('hidden');
-    return;
-  }
-
-  if (!state.currentUser) {
-    dashboardViewEl.classList.add('hidden');
-    authViewEl.classList.remove('hidden');
-
-    renderAuthView(authViewEl, {
-      onSubmit: handleAuthSubmit
-    });
-    return;
-  }
-
-  authViewEl.classList.add('hidden');
-  dashboardViewEl.classList.remove('hidden');
-  renderRenters();
-}
-
-async function handleAuthSubmit(payload) {
-  const mode = getState().authViewMode;
-
-  setState({ authLoading: true, authError: '' });
-
-  try {
-    if (mode === 'signup') {
-      await signUpUser(payload);
-      return;
-    }
-
-    await signInUser(payload);
-  } catch (error) {
-    setState({ authError: error.message, authLoading: false });
-  }
-}
-
 function renderRenters() {
-  if (!getState().currentUser) {
-    return;
-  }
-
   const query = searchInputEl.value.trim().toLowerCase();
   renterListEl.innerHTML = '';
 
@@ -196,3 +130,5 @@ function renderRenters() {
     renterListEl.append(card);
   });
 }
+
+renderRenters();
