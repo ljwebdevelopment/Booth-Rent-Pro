@@ -24,25 +24,16 @@ export function renderRenterDrawer({ drawerElement, overlayElement, renter, paym
   const header = document.createElement('div');
   header.className = 'drawer-header';
 
-  const titleWrap = document.createElement('div');
-
   const title = document.createElement('h2');
   title.textContent = renter.name;
   title.style.margin = '0';
-
-  const subtitle = document.createElement('p');
-  subtitle.style.margin = '6px 0 0';
-  subtitle.style.color = 'var(--ink-muted)';
-  subtitle.textContent = [renter.phone || '', renter.email || ''].filter(Boolean).join(' • ') || 'No contact info';
-
-  titleWrap.append(title, subtitle);
 
   const closeButton = document.createElement('button');
   closeButton.type = 'button';
   closeButton.className = 'btn';
   closeButton.textContent = 'Close';
   closeButton.addEventListener('click', () => closeDrawer(drawerElement, overlayElement));
-  header.append(titleWrap, closeButton);
+  header.append(title, closeButton);
 
   const body = document.createElement('div');
   body.className = 'drawer-body';
