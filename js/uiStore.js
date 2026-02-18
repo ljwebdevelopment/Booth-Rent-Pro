@@ -5,13 +5,6 @@ const state = {
   paymentMethod: 'Cash',
   paymentOtherMethod: '',
   noteDraftByRenterId: {},
-  currentUser: null,
-  authReady: false,
-  authViewMode: 'signin', // "signin" | "signup"
-  authLoading: false,
-  authError: '',
-  renters: [],
-  businessProfile: null,
 };
 
 const listeners = new Set();

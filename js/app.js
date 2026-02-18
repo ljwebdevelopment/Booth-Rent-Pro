@@ -1,10 +1,43 @@
+import { createRenterShape } from './dataModel.js';
 import { getUiState, updateUiState } from './uiStore.js';
 import { createRenterCard } from './components/renterCard.js';
 import { closeDrawer, renderRenterDrawer } from './components/drawer.js';
-import { renderAuthView } from './views/authView.js';
-import { listenToAuthChanges, signOutUser } from './auth.js';
-import { firebaseReady } from './firebase-init.js';
-import { business, renters } from './db.js';
+
+const renters = [
+  createRenterShape({
+    id: 'r1',
+    name: 'Ari Johnson',
+    email: 'ari@example.com',
+    phone: '312-555-1111',
+    monthlyRent: 900,
+    dueDayOfMonth: 5,
+    color: '#DDF3E6',
+    gradeScore: 94,
+    gradeLetter: 'A',
+  }),
+  createRenterShape({
+    id: 'r2',
+    name: 'Mina Patel',
+    email: 'mina@example.com',
+    phone: '312-555-2222',
+    monthlyRent: 1050,
+    dueDayOfMonth: 12,
+    color: '#F3E4DD',
+    gradeScore: 84,
+    gradeLetter: 'B',
+  }),
+  createRenterShape({
+    id: 'r3',
+    name: 'Jules Carter',
+    email: 'jules@example.com',
+    phone: '312-555-3333',
+    monthlyRent: 780,
+    dueDayOfMonth: 20,
+    color: '#DEEAF9',
+    gradeScore: 72,
+    gradeLetter: 'C',
+  }),
+];
 
 const paymentsByRenterId = {
   r1: [
@@ -39,31 +72,20 @@ const historyByRenterId = {
   },
 };
 
-const authViewElement = document.getElementById('authView');
-const dashboardViewElement = document.getElementById('dashboardView');
 const rentersListElement = document.getElementById('rentersList');
 const searchInput = document.getElementById('searchInput');
 const drawerElement = document.getElementById('renterDrawer');
 const overlayElement = document.getElementById('drawerOverlay');
 const menuButton = document.getElementById('menuButton');
 const menuPopover = document.getElementById('menuPopover');
-const logoutMenuItem = document.getElementById('logoutMenuItem');
-
-let unsubscribeRentersListener = null;
 
 function renderRenters() {
-  const { searchText, renters: renterRows } = getUiState();
+  const { searchText } = getUiState();
   const normalizedSearch = searchText.trim().toLowerCase();
 
-  const visibleRenters = renterRows.filter((renter) => renter.name.toLowerCase().includes(normalizedSearch));
+  const visibleRenters = renters.filter((renter) => renter.name.toLowerCase().includes(normalizedSearch));
 
   rentersListElement.innerHTML = '';
-
-  if (!visibleRenters.length) {
-    rentersListElement.innerHTML = '<div class="panel">No active renters found yet.</div>';
-    return;
-  }
-
   visibleRenters.forEach((renter) => {
     const card = createRenterCard(renter, openRenterDrawer);
     rentersListElement.appendChild(card);
@@ -82,63 +104,6 @@ function openRenterDrawer(renter) {
   });
 }
 
-function showAuthView() {
-  authViewElement.classList.remove('hidden');
-  dashboardViewElement.classList.add('hidden');
-  dashboardViewElement.setAttribute('aria-hidden', 'true');
-  renderAuthView(authViewElement);
-}
-
-function showDashboardView() {
-  authViewElement.classList.add('hidden');
-  dashboardViewElement.classList.remove('hidden');
-  dashboardViewElement.setAttribute('aria-hidden', 'false');
-  renderRenters();
-}
-
-function renderAppShell() {
-  const { authReady, currentUser, authError } = getUiState();
-
-  if (!authReady) return;
-
-  if (authError && !firebaseReady) {
-    authViewElement.innerHTML = `<div class="auth-card"><p class="auth-error">${authError}</p></div>`;
-    authViewElement.classList.remove('hidden');
-    dashboardViewElement.classList.add('hidden');
-    return;
-  }
-
-  if (currentUser) {
-    showDashboardView();
-  } else {
-    showAuthView();
-  }
-}
-
-async function startBusinessAndRenterDataFlow(user) {
-  if (unsubscribeRentersListener) {
-    unsubscribeRentersListener();
-    unsubscribeRentersListener = null;
-  }
-
-  const userProfile = await business.get(user.uid);
-  updateUiState({ businessProfile: userProfile });
-
-  unsubscribeRentersListener = renters.listen(user.uid, { status: 'active' }, (renterRows) => {
-    updateUiState({ renters: renterRows });
-    renderRenters();
-  });
-}
-
-function clearSignedOutDataFlow() {
-  if (unsubscribeRentersListener) {
-    unsubscribeRentersListener();
-    unsubscribeRentersListener = null;
-  }
-
-  updateUiState({ renters: [], businessProfile: null, selectedRenterId: null });
-}
-
 function setupEvents() {
   searchInput.addEventListener('input', (event) => {
     updateUiState({ searchText: event.target.value });
@@ -149,11 +114,6 @@ function setupEvents() {
 
   menuButton.addEventListener('click', () => {
     menuPopover.classList.toggle('open');
-  });
-
-  logoutMenuItem.addEventListener('click', async () => {
-    await signOutUser();
-    menuPopover.classList.remove('open');
   });
 
   document.addEventListener('click', (event) => {
@@ -172,32 +132,8 @@ function setupEvents() {
 }
 
 function startApp() {
+  renderRenters();
   setupEvents();
-
-  if (!firebaseReady) {
-    updateUiState({
-      authReady: true,
-      authError: 'Firebase config is missing. Update js/appConfig.js with your project values to use sign in.',
-    });
-    renderAppShell();
-    return;
-  }
-
-  listenToAuthChanges(async (user) => {
-    updateUiState({
-      currentUser: user,
-      authReady: true,
-      authError: '',
-    });
-
-    if (user) {
-      await startBusinessAndRenterDataFlow(user);
-    } else {
-      clearSignedOutDataFlow();
-    }
-
-    renderAppShell();
-  });
 }
 
 startApp();
