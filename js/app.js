@@ -1,38 +1,81 @@
 import { createRenterShape } from './dataModel.js';
-import {
-  billing,
-  branding,
-  business,
-  events as eventDb,
-  ledger as ledgerDb,
-  renters as renterDb,
-  seedInMemoryDb,
-} from './db.js';
+import { events as eventDb } from './db.js';
 import { getUiState, updateUiState } from './uiStore.js';
 import { createRenterCard } from './components/renterCard.js';
 import { closeDrawer, renderRenterDrawer } from './components/drawer.js';
 
 const CURRENT_USER_UID = 'demo-user-1';
-const MAX_LOGO_BYTES = 3 * 1024 * 1024;
-const ALLOWED_LOGO_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
 
-const initialRenters = [
-  createRenterShape({ id: 'r1', name: 'Ari Johnson', email: 'ari@example.com', phone: '312-555-1111', monthlyRent: 900, dueDayOfMonth: 5, color: '#DDF3E6', gradeScore: 94, gradeLetter: 'A', status: 'active' }),
-  createRenterShape({ id: 'r2', name: 'Mina Patel', email: 'mina@example.com', phone: '312-555-2222', monthlyRent: 1050, dueDayOfMonth: 12, color: '#F3E4DD', gradeScore: 84, gradeLetter: 'B', status: 'active' }),
-  createRenterShape({ id: 'r3', name: 'Jules Carter', email: 'jules@example.com', phone: '312-555-3333', monthlyRent: 780, dueDayOfMonth: 20, color: '#DEEAF9', gradeScore: 72, gradeLetter: 'C', status: 'active' }),
+const renters = [
+  createRenterShape({
+    id: 'r1',
+    name: 'Ari Johnson',
+    email: 'ari@example.com',
+    phone: '312-555-1111',
+    monthlyRent: 900,
+    dueDayOfMonth: 5,
+    color: '#DDF3E6',
+    gradeScore: 94,
+    gradeLetter: 'A',
+    status: 'active',
+  }),
+  createRenterShape({
+    id: 'r2',
+    name: 'Mina Patel',
+    email: 'mina@example.com',
+    phone: '312-555-2222',
+    monthlyRent: 1050,
+    dueDayOfMonth: 12,
+    color: '#F3E4DD',
+    gradeScore: 84,
+    gradeLetter: 'B',
+    status: 'active',
+  }),
+  createRenterShape({
+    id: 'r3',
+    name: 'Jules Carter',
+    email: 'jules@example.com',
+    phone: '312-555-3333',
+    monthlyRent: 780,
+    dueDayOfMonth: 20,
+    color: '#DEEAF9',
+    gradeScore: 72,
+    gradeLetter: 'C',
+    status: 'active',
+  }),
 ];
 
-const seededLedgerEntries = [
-  { id: 'l1', userUid: CURRENT_USER_UID, renterId: 'r1', type: 'payment', amount: 300, appliesToMonthKey: '2026-02', date: '2026-02-02', note: 'Card payment' },
-  { id: 'l2', userUid: CURRENT_USER_UID, renterId: 'r1', type: 'payment', amount: 250, appliesToMonthKey: '2026-02', date: '2026-02-10', note: 'Cash App payment' },
-  { id: 'l3', userUid: CURRENT_USER_UID, renterId: 'r2', type: 'payment', amount: 400, appliesToMonthKey: '2026-02', date: '2026-02-06', note: 'Partial payment' },
-  { id: 'l4', userUid: CURRENT_USER_UID, renterId: 'r3', type: 'payment', amount: 180, appliesToMonthKey: '2026-02', date: '2026-02-01', note: 'Weekly payment' },
-  { id: 'l5', userUid: CURRENT_USER_UID, renterId: 'r3', type: 'payment', amount: 180, appliesToMonthKey: '2026-02', date: '2026-02-08', note: 'Weekly payment' },
-];
+const paymentsByRenterId = {
+  r1: [
+    { id: 'l1', renterId: 'r1', amount: 300, method: 'Card', note: 'First installment', date: '2026-02-02' },
+    { id: 'l2', renterId: 'r1', amount: 250, method: 'Cash App', note: 'Mid-month', date: '2026-02-10' },
+  ],
+  r2: [{ id: 'l3', renterId: 'r2', amount: 400, method: 'Venmo', note: 'Partial payment', date: '2026-02-06' }],
+  r3: [
+    { id: 'l4', renterId: 'r3', amount: 180, method: 'Cash', note: 'Weekly payment', date: '2026-02-01' },
+    { id: 'l5', renterId: 'r3', amount: 180, method: 'Cash', note: 'Weekly payment', date: '2026-02-08' },
+  ],
+};
+
+const baseHistoryByRenterId = {
+  r1: {
+    'February 2026': [
+      { date: '2026-02-02', type: 'Payment', amount: 300, note: 'Card payment' },
+      { date: '2026-02-10', type: 'Payment', amount: 250, note: 'Cash App payment' },
+    ],
+  },
+  r2: {
+    'February 2026': [{ date: '2026-02-06', type: 'Payment', amount: 400, note: 'Partial' }],
+  },
+  r3: {
+    'February 2026': [
+      { date: '2026-02-01', type: 'Payment', amount: 180, note: 'Cash' },
+      { date: '2026-02-08', type: 'Payment', amount: 180, note: 'Cash' },
+    ],
+  },
+};
 
 const reminderEventsByRenterId = {};
-const ledgerByRenterId = {};
-let activeRenters = [];
 
 const rentersListElement = document.getElementById('rentersList');
 const searchInput = document.getElementById('searchInput');
@@ -44,75 +87,24 @@ const railArchiveButton = document.getElementById('railArchiveButton');
 const menuArchiveButton = document.getElementById('menuArchiveButton');
 const archivePanelElement = document.getElementById('archivePanel');
 const archiveContentElement = document.getElementById('archiveContent');
-const closeArchivePanelButton = document.getElementById('closeArchivePanelButton');
-const railSettingsButton = document.getElementById('railSettingsButton');
-const menuSettingsButton = document.getElementById('menuSettingsButton');
-const settingsPanelElement = document.getElementById('settingsPanel');
-const closeSettingsPanelButton = document.getElementById('closeSettingsPanelButton');
-
-const settingsFieldMap = {
-  businessName: document.getElementById('businessNameInput'),
-  phone: document.getElementById('businessPhoneInput'),
-  address1: document.getElementById('businessAddress1Input'),
-  address2: document.getElementById('businessAddress2Input'),
-  city: document.getElementById('businessCityInput'),
-  state: document.getElementById('businessStateInput'),
-  zip: document.getElementById('businessZipInput'),
-};
-
-const saveSettingsButton = document.getElementById('saveSettingsButton');
-const cancelSettingsButton = document.getElementById('cancelSettingsButton');
-const settingsSavedNotice = document.getElementById('settingsSavedNotice');
-const settingsError = document.getElementById('settingsError');
-const logoFileInput = document.getElementById('logoFileInput');
-const uploadLogoButton = document.getElementById('uploadLogoButton');
-const logoProgressText = document.getElementById('logoProgressText');
-const logoError = document.getElementById('logoError');
-const logoPreviewImage = document.getElementById('logoPreviewImage');
-const receiptPreviewLogo = document.getElementById('receiptPreviewLogo');
-const receiptPreviewBusinessName = document.getElementById('receiptPreviewBusinessName');
-const receiptPreviewPhone = document.getElementById('receiptPreviewPhone');
-const receiptPreviewLocation = document.getElementById('receiptPreviewLocation');
 
 let removeReminderListener = null;
 let removeActiveRentersListener = null;
 let removeArchivedRentersListener = null;
 
-seedInMemoryDb(CURRENT_USER_UID, { renters: initialRenters, ledger: seededLedgerEntries });
+seedInMemoryDb(CURRENT_USER_UID, {
+  renters: initialRenters,
+  ledger: Object.values(paymentsByRenterId).flat(),
+});
 
 function getCurrentMonthKey() {
   const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  return `${now.getFullYear()}-${month}`;
 }
 
-function toSafeDate(value) {
-  if (!value) {
-    return new Date(0);
-  }
-
-  if (value instanceof Date) {
-    return value;
-  }
-
-  if (typeof value?.toDate === 'function') {
-    return value.toDate();
-  }
-
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? new Date(0) : parsed;
-}
-
-function formatMonthLabelFromMonthKey(monthKey) {
-  if (!monthKey || !monthKey.includes('-')) {
-    return 'Unknown month';
-  }
-
-  const [year, month] = monthKey.split('-');
-  const date = new Date(Number(year), Number(month) - 1, 1);
-  if (Number.isNaN(date.getTime())) {
-    return 'Unknown month';
-  }
-
+function formatMonthLabel(dateInput) {
+  const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
   return new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(date);
 }
 
@@ -129,127 +121,122 @@ function showToast(message) {
   }, 1800);
 }
 
-function draftEqualsSaved(saved, draft) {
-  return JSON.stringify(saved) === JSON.stringify(draft);
-}
+function getHistoryByMonthWithReminders(renterId) {
+  const baseHistory = baseHistoryByRenterId[renterId] || {};
+  const mergedHistory = JSON.parse(JSON.stringify(baseHistory));
+  const reminderEvents = reminderEventsByRenterId[renterId] || [];
 
-function renderSettingsPanel() {
-  const uiState = getUiState();
-  const { businessDraft } = uiState;
-
-  Object.entries(settingsFieldMap).forEach(([key, input]) => {
-    input.value = businessDraft[key] || '';
-  });
-
-  saveSettingsButton.disabled = !uiState.businessDirty || uiState.settingsSaving;
-  saveSettingsButton.textContent = uiState.settingsSaving ? 'Saving...' : 'Save Settings';
-  cancelSettingsButton.disabled = uiState.settingsSaving;
-
-  settingsSavedNotice.classList.toggle('hidden-panel', !uiState.settingsSavedNotice);
-  settingsError.classList.toggle('hidden-panel', !uiState.settingsError);
-  settingsError.textContent = uiState.settingsError || '';
-
-  uploadLogoButton.disabled = uiState.logoUploading;
-  uploadLogoButton.textContent = uiState.logoUploading ? 'Uploading...' : 'Upload Logo';
-  logoProgressText.textContent = uiState.logoUploading ? `${Math.round(uiState.logoProgress)}%` : '';
-  logoError.classList.toggle('hidden-panel', !uiState.logoError);
-  logoError.textContent = uiState.logoError || '';
-
-  const logoUrl = businessDraft.logoUrl || '';
-  logoPreviewImage.src = logoUrl;
-  logoPreviewImage.style.display = logoUrl ? 'block' : 'none';
-
-  receiptPreviewLogo.src = logoUrl;
-  receiptPreviewLogo.style.display = logoUrl ? 'block' : 'none';
-  receiptPreviewBusinessName.textContent = businessDraft.businessName || 'Your business name';
-  receiptPreviewPhone.textContent = businessDraft.phone || 'Phone';
-  const location = [businessDraft.city, businessDraft.state, businessDraft.zip].filter(Boolean).join(', ');
-  receiptPreviewLocation.textContent = location || 'City, ST ZIP';
-}
-
-function computeStatusForRenter(renter, monthKey) {
-  const entries = ledgerByRenterId[renter.id] || [];
-  const chargesTotal = entries.filter((e) => e.type === 'charge' && e.appliesToMonthKey === monthKey).reduce((sum, e) => sum + Number(e.amount || 0), 0);
-  const paymentsTotal = entries.filter((e) => e.type === 'payment' && e.appliesToMonthKey === monthKey).reduce((sum, e) => sum + Number(e.amount || 0), 0);
-  const remaining = Math.max(0, chargesTotal - paymentsTotal);
-
-  if (remaining === 0 && chargesTotal > 0) return { label: 'paid' };
-  if (paymentsTotal > 0 && remaining > 0) return { label: 'partial' };
-  if (new Date().getDate() > Number(renter.dueDayOfMonth) && remaining > 0) return { label: 'overdue' };
-  if (new Date().getDate() === Number(renter.dueDayOfMonth) && remaining > 0) return { label: 'due' };
-  return { label: 'upcoming' };
-}
-
-async function refreshRenterLedger(renterId) {
-  ledgerByRenterId[renterId] = await ledgerDb.listByRenter(CURRENT_USER_UID, renterId);
-}
-
-function getHistoryByMonthWithMergedData(renterId) {
-  const mergedHistory = {};
-
-  (ledgerByRenterId[renterId] || []).forEach((entry) => {
-    const monthLabel = formatMonthLabelFromMonthKey(entry.appliesToMonthKey);
-    if (!mergedHistory[monthLabel]) mergedHistory[monthLabel] = [];
+  reminderEvents.forEach((eventData) => {
+    const monthLabel = formatMonthLabel(eventData.sentAt);
+    if (!mergedHistory[monthLabel]) {
+      mergedHistory[monthLabel] = [];
+    }
 
     mergedHistory[monthLabel].push({
-      date: entry.date || entry.createdAt,
-      type: entry.type === 'charge' ? 'Charge' : 'Payment',
-      amount: Number(entry.amount || 0),
-      note: entry.note || '',
-    });
-  });
-
-  (reminderEventsByRenterId[renterId] || []).forEach((eventData) => {
-    const monthLabel = formatMonthLabelFromMonthKey(eventData.monthKey);
-    if (!mergedHistory[monthLabel]) mergedHistory[monthLabel] = [];
-
-    mergedHistory[monthLabel].push({
-      date: eventData.sentAt || eventData.createdAt,
+      date: eventData.sentAt,
       type: 'Reminder marked sent',
       note: eventData.message || '',
     });
   });
 
   Object.keys(mergedHistory).forEach((monthLabel) => {
-    mergedHistory[monthLabel].sort((a, b) => toSafeDate(b.date) - toSafeDate(a.date));
+    mergedHistory[monthLabel].sort((a, b) => new Date(b.date) - new Date(a.date));
   });
 
   return mergedHistory;
 }
 
 function getRenterById(renterId) {
-  return activeRenters.find((renter) => renter.id === renterId) || getUiState().archivedRenters.find((renter) => renter.id === renterId) || null;
+  return activeRenters.find((renter) => renter.id === renterId)
+    || getUiState().archivedRenters.find((renter) => renter.id === renterId)
+    || null;
+}
+
+let removeReminderListener = null;
+
+function getCurrentMonthKey() {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  return `${now.getFullYear()}-${month}`;
+}
+
+function formatMonthLabel(dateInput) {
+  const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
+  return new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(date);
+}
+
+function showToast(message) {
+  const toast = document.createElement('div');
+  toast.className = 'app-toast';
+  toast.textContent = message;
+  document.body.appendChild(toast);
+
+  requestAnimationFrame(() => {
+    toast.classList.add('open');
+  });
+
+  window.setTimeout(() => {
+    toast.classList.remove('open');
+    window.setTimeout(() => toast.remove(), 180);
+  }, 1800);
+}
+
+function getHistoryByMonthWithReminders(renterId) {
+  const baseHistory = baseHistoryByRenterId[renterId] || {};
+  const mergedHistory = JSON.parse(JSON.stringify(baseHistory));
+  const reminderEvents = reminderEventsByRenterId[renterId] || [];
+
+  reminderEvents.forEach((eventData) => {
+    const monthLabel = formatMonthLabel(eventData.sentAt);
+    if (!mergedHistory[monthLabel]) {
+      mergedHistory[monthLabel] = [];
+    }
+
+    mergedHistory[monthLabel].push({
+      date: eventData.sentAt,
+      type: 'Reminder marked sent',
+      note: eventData.message || '',
+    });
+  });
+
+  Object.keys(mergedHistory).forEach((monthLabel) => {
+    mergedHistory[monthLabel].sort((a, b) => new Date(b.date) - new Date(a.date));
+  });
+
+  return mergedHistory;
+}
+
+function getRenterById(renterId) {
+  return renters.find((renter) => renter.id === renterId) || null;
 }
 
 function renderRenters() {
-  const uiState = getUiState();
-  const { searchText, remindersByRenterForCurrentMonth, reminderPopoverOpenForRenterId, archiveOpen, settingsOpen } = uiState;
-  const monthKey = getCurrentMonthKey();
+  const { searchText, remindersByRenterForCurrentMonth, reminderPopoverOpenForRenterId } = getUiState();
+  const normalizedSearch = searchText.trim().toLowerCase();
 
-  if (archiveOpen || settingsOpen) {
+  if (archiveOpen) {
     rentersListElement.classList.add('hidden-panel');
-    archivePanelElement.classList.toggle('hidden-panel', !archiveOpen);
-    settingsPanelElement.classList.toggle('hidden-panel', !settingsOpen);
+    archivePanelElement.classList.remove('hidden-panel');
     return;
   }
 
   rentersListElement.classList.remove('hidden-panel');
   archivePanelElement.classList.add('hidden-panel');
-  settingsPanelElement.classList.add('hidden-panel');
 
-  const visibleRenters = activeRenters
-    .filter((renter) => renter.name.toLowerCase().includes(searchText.trim().toLowerCase()))
-    .map((renter) => ({ ...renter, statusLabel: computeStatusForRenter(renter, monthKey).label }));
+  const visibleRenters = activeRenters.filter((renter) => renter.name.toLowerCase().includes(normalizedSearch));
 
   rentersListElement.innerHTML = '';
   visibleRenters.forEach((renter) => {
+    const reminderDatesForMonth = remindersByRenterForCurrentMonth[renter.id] || [];
+
     const card = createRenterCard({
       renter,
-      reminderDatesForMonth: remindersByRenterForCurrentMonth[renter.id] || [],
+      reminderDatesForMonth,
       isReminderPopoverOpen: reminderPopoverOpenForRenterId === renter.id,
       onCardClick: openRenterDrawer,
       onReminderDotClick: toggleReminderPopover,
     });
+
     rentersListElement.appendChild(card);
   });
 }
@@ -259,6 +246,7 @@ function renderArchivePanel() {
   const archivedRenters = uiState.archivedRenters;
 
   archiveContentElement.innerHTML = '';
+
   if (uiState.archiveLoading) {
     archiveContentElement.textContent = 'Loading archived renters...';
     return;
@@ -290,11 +278,7 @@ function renderArchivePanel() {
     restoreButton.className = 'btn';
     restoreButton.textContent = 'Restore';
     restoreButton.addEventListener('click', async () => {
-      const result = await renterDb.restore(CURRENT_USER_UID, renter.id);
-      if (!result.ok) {
-        showToast(result.error || 'Unable to restore renter.');
-        return;
-      }
+      await renterDb.restore(CURRENT_USER_UID, renter.id);
       showToast('Renter restored.');
     });
 
@@ -303,7 +287,12 @@ function renderArchivePanel() {
     deleteButton.className = 'btn btn-danger-text';
     deleteButton.textContent = 'Permanently Delete';
     deleteButton.addEventListener('click', () => {
-      updateUiState({ deleteConfirmOpen: true, deleteTargetRenterId: renter.id, deleteConfirmText: '', deleteError: null });
+      updateUiState({
+        deleteConfirmOpen: true,
+        deleteTargetRenterId: renter.id,
+        deleteConfirmText: '',
+        deleteError: null,
+      });
       renderArchivePanel();
     });
 
@@ -314,12 +303,18 @@ function renderArchivePanel() {
 
   if (uiState.deleteConfirmOpen && uiState.deleteTargetRenterId) {
     const renter = archivedRenters.find((item) => item.id === uiState.deleteTargetRenterId);
-    if (!renter) return;
+    if (!renter) {
+      return;
+    }
 
     const modal = document.createElement('div');
     modal.className = 'archive-delete-modal';
     const matches = uiState.deleteConfirmText.trim() === renter.name;
-    modal.innerHTML = `<h4>Permanently delete ${renter.name}? This cannot be undone.</h4><p>Type the renter's name to confirm:</p>`;
+
+    modal.innerHTML = `
+      <h4>Permanently delete ${renter.name}? This cannot be undone.</h4>
+      <p>Type the renter's name to confirm:</p>
+    `;
 
     const input = document.createElement('input');
     input.className = 'search-input';
@@ -338,7 +333,14 @@ function renderArchivePanel() {
     cancelButton.className = 'btn';
     cancelButton.textContent = 'Cancel';
     cancelButton.addEventListener('click', () => {
-      updateUiState({ deleteConfirmOpen: false, deleteTargetRenterId: null, deleteConfirmText: '', deleteWorking: false, deleteError: null, deleteProgress: 0 });
+      updateUiState({
+        deleteConfirmOpen: false,
+        deleteTargetRenterId: null,
+        deleteConfirmText: '',
+        deleteWorking: false,
+        deleteError: null,
+        deleteProgress: 0,
+      });
       renderArchivePanel();
     });
 
@@ -351,28 +353,33 @@ function renderArchivePanel() {
       updateUiState({ deleteWorking: true, deleteProgress: 1, deleteError: null });
       renderArchivePanel();
 
-      try {
-        const result = await renterDb.permanentlyDelete(CURRENT_USER_UID, renter.id);
-        if (!result.deletedRenter) {
-          updateUiState({ deleteError: 'Failed to delete renter.', deleteWorking: false });
-          renderArchivePanel();
-          return;
-        }
+      const result = await renterDb.permanentlyDelete(CURRENT_USER_UID, renter.id);
 
-        delete reminderEventsByRenterId[renter.id];
-        delete ledgerByRenterId[renter.id];
-
-        updateUiState({ deleteConfirmOpen: false, deleteTargetRenterId: null, deleteConfirmText: '', deleteWorking: false, deleteProgress: result.deletedEvents + result.deletedLedger + 1 });
-        showToast(`Deleted renter, ${result.deletedEvents} events, ${result.deletedLedger} ledger entries.`);
-      } catch (error) {
-        updateUiState({ deleteError: `Delete failed: ${error.message}`, deleteWorking: false });
+      if (!result.deletedRenter) {
+        updateUiState({ deleteError: 'Failed to delete renter.', deleteWorking: false });
+        renderArchivePanel();
+        return;
       }
 
+      delete reminderEventsByRenterId[renter.id];
+      delete baseHistoryByRenterId[renter.id];
+      delete paymentsByRenterId[renter.id];
+
+      updateUiState({
+        deleteConfirmOpen: false,
+        deleteTargetRenterId: null,
+        deleteConfirmText: '',
+        deleteWorking: false,
+        deleteProgress: result.deletedEvents + result.deletedLedger + 1,
+      });
+
+      showToast(`Deleted renter, ${result.deletedEvents} events, ${result.deletedLedger} ledger entries.`);
       renderArchivePanel();
       renderRenters();
     });
 
     actions.append(cancelButton, confirmDeleteButton);
+
     if (uiState.deleteError) {
       const errorLine = document.createElement('p');
       errorLine.className = 'btn-danger-text';
@@ -385,12 +392,7 @@ function renderArchivePanel() {
   }
 }
 
-async function ensureChargeAndLedgerRefreshForRenter(renter) {
-  await billing.ensureMonthlyCharge(CURRENT_USER_UID, renter, new Date());
-  await refreshRenterLedger(renter.id);
-}
-
-async function openRenterDrawer(renter) {
+function openRenterDrawer(renter) {
   updateUiState({ selectedRenterId: renter.id });
   await ensureChargeAndLedgerRefreshForRenter(renter);
 
@@ -403,16 +405,82 @@ async function openRenterDrawer(renter) {
     drawerElement,
     overlayElement,
     renter,
-    paymentsThisMonth,
-    historyByMonth: getHistoryByMonthWithMergedData(renter.id),
+    paymentsThisMonth: paymentsByRenterId[renter.id] || [],
+    historyByMonth: getHistoryByMonthWithReminders(renter.id),
     onMarkReminderSent: markReminderSent,
-    onArchiveRenter: archiveRenterFromDrawer,
   });
 }
 
-async function rerenderOpenDrawerIfNeeded() {
+function rerenderOpenDrawerIfNeeded() {
   const { selectedRenterId, drawerOpen } = getUiState();
-  if (!drawerOpen || !selectedRenterId) return;
+  if (!drawerOpen || !selectedRenterId) {
+    return;
+  }
+
+  const renter = getRenterById(selectedRenterId);
+  if (!renter) {
+    return;
+  }
+
+  openRenterDrawer(renter);
+}
+
+async function markReminderSent(renterId) {
+  const sentAt = new Date();
+  await eventDb.logReminderSent(CURRENT_USER_UID, renterId, sentAt);
+  showToast('Reminder marked sent.');
+}
+
+function toggleReminderPopover(renterId) {
+  const { reminderPopoverOpenForRenterId } = getUiState();
+  const nextValue = reminderPopoverOpenForRenterId === renterId ? null : renterId;
+  updateUiState({ reminderPopoverOpenForRenterId: nextValue });
+  renderRenters();
+}
+
+function startReminderListener() {
+  const monthKey = getCurrentMonthKey();
+
+  if (removeReminderListener) {
+    removeReminderListener();
+  }
+
+  removeReminderListener = eventDb.listenRemindersForMonth(CURRENT_USER_UID, monthKey, (eventsForMonth) => {
+    const grouped = {};
+    const allByRenter = {};
+
+    eventsForMonth.forEach((eventData) => {
+      if (!grouped[eventData.renterId]) {
+        grouped[eventData.renterId] = [];
+      }
+      grouped[eventData.renterId].push(eventData.sentAt);
+
+      if (!allByRenter[eventData.renterId]) {
+        allByRenter[eventData.renterId] = [];
+      }
+      allByRenter[eventData.renterId].push(eventData);
+    });
+
+    Object.keys(grouped).forEach((renterId) => {
+      grouped[renterId].sort((a, b) => new Date(b) - new Date(a));
+    });
+
+    Object.keys(allByRenter).forEach((renterId) => {
+      allByRenter[renterId].sort((a, b) => new Date(b.sentAt) - new Date(a.sentAt));
+      reminderEventsByRenterId[renterId] = allByRenter[renterId];
+    });
+
+    updateUiState({ remindersByRenterForCurrentMonth: grouped });
+    renderRenters();
+    rerenderOpenDrawerIfNeeded();
+  });
+}
+
+function rerenderOpenDrawerIfNeeded() {
+  const { selectedRenterId, drawerOpen } = getUiState();
+  if (!drawerOpen || !selectedRenterId) {
+    return;
+  }
 
   const renter = getRenterById(selectedRenterId);
   if (!renter || renter.status !== 'active') {
@@ -420,16 +488,11 @@ async function rerenderOpenDrawerIfNeeded() {
     return;
   }
 
-  await openRenterDrawer(renter);
+  openRenterDrawer(renter);
 }
 
 async function archiveRenterFromDrawer(renterId) {
-  const result = await renterDb.archive(CURRENT_USER_UID, renterId);
-  if (!result.ok) {
-    showToast(result.error || 'Unable to archive renter.');
-    return;
-  }
-
+  await renterDb.archive(CURRENT_USER_UID, renterId);
   closeDrawer(drawerElement, overlayElement);
   showToast('Renter archived.');
 }
@@ -447,22 +510,30 @@ function toggleReminderPopover(renterId) {
 
 function startReminderListener() {
   const monthKey = getCurrentMonthKey();
-  if (removeReminderListener) removeReminderListener();
+
+  if (removeReminderListener) {
+    removeReminderListener();
+  }
 
   removeReminderListener = eventDb.listenRemindersForMonth(CURRENT_USER_UID, monthKey, (eventsForMonth) => {
     const grouped = {};
     const allByRenter = {};
 
     eventsForMonth.forEach((eventData) => {
-      if (!grouped[eventData.renterId]) grouped[eventData.renterId] = [];
-      if (!allByRenter[eventData.renterId]) allByRenter[eventData.renterId] = [];
+      if (!grouped[eventData.renterId]) {
+        grouped[eventData.renterId] = [];
+      }
       grouped[eventData.renterId].push(eventData.sentAt);
+
+      if (!allByRenter[eventData.renterId]) {
+        allByRenter[eventData.renterId] = [];
+      }
       allByRenter[eventData.renterId].push(eventData);
     });
 
-    Object.keys(grouped).forEach((renterId) => grouped[renterId].sort((a, b) => toSafeDate(b) - toSafeDate(a)));
+    Object.keys(grouped).forEach((renterId) => grouped[renterId].sort((a, b) => new Date(b) - new Date(a)));
     Object.keys(allByRenter).forEach((renterId) => {
-      allByRenter[renterId].sort((a, b) => toSafeDate(b.sentAt) - toSafeDate(a.sentAt));
+      allByRenter[renterId].sort((a, b) => new Date(b.sentAt) - new Date(a.sentAt));
       reminderEventsByRenterId[renterId] = allByRenter[renterId];
     });
 
@@ -472,19 +543,18 @@ function startReminderListener() {
   });
 }
 
-async function startRenterListeners() {
+function startRenterListeners() {
   updateUiState({ archiveLoading: true, archiveError: null });
 
-  if (removeActiveRentersListener) removeActiveRentersListener();
-  if (removeArchivedRentersListener) removeArchivedRentersListener();
+  if (removeActiveRentersListener) {
+    removeActiveRentersListener();
+  }
+  if (removeArchivedRentersListener) {
+    removeArchivedRentersListener();
+  }
 
-  removeActiveRentersListener = renterDb.listen(CURRENT_USER_UID, { status: 'active' }, async (nextRenters) => {
+  removeActiveRentersListener = renterDb.listen(CURRENT_USER_UID, { status: 'active' }, (nextRenters) => {
     activeRenters = nextRenters;
-
-    for (let index = 0; index < activeRenters.length; index += 1) {
-      await ensureChargeAndLedgerRefreshForRenter(activeRenters[index]);
-    }
-
     renderRenters();
     rerenderOpenDrawerIfNeeded();
   });
@@ -492,56 +562,6 @@ async function startRenterListeners() {
   removeArchivedRentersListener = renterDb.listen(CURRENT_USER_UID, { status: 'archived' }, (nextRenters) => {
     updateUiState({ archivedRenters: nextRenters, archiveLoading: false, archiveError: null });
     renderArchivePanel();
-  });
-}
-
-async function loadBusinessProfileIfNeeded() {
-  const uiState = getUiState();
-  if (uiState.businessSaved && uiState.businessSaved.updatedAt) {
-    return;
-  }
-
-  const profile = await business.get(CURRENT_USER_UID);
-  updateUiState({
-    businessSaved: { ...profile },
-    businessDraft: { ...profile },
-    businessDirty: false,
-  });
-}
-
-function openArchivePanel() {
-  updateUiState({ archiveOpen: true, settingsOpen: false, deleteConfirmOpen: false, deleteTargetRenterId: null, deleteConfirmText: '' });
-  menuPopover.classList.remove('open');
-  renderArchivePanel();
-  renderRenters();
-}
-
-function closeArchivePanel() {
-  updateUiState({ archiveOpen: false });
-  renderRenters();
-}
-
-async function openSettingsPanel() {
-  await loadBusinessProfileIfNeeded();
-  updateUiState({ settingsOpen: true, archiveOpen: false, settingsError: null, logoError: null });
-  menuPopover.classList.remove('open');
-  renderSettingsPanel();
-  renderRenters();
-}
-
-function closeSettingsPanel() {
-  updateUiState({ settingsOpen: false });
-  renderRenters();
-}
-
-function onBusinessDraftChange(field, value) {
-  const uiState = getUiState();
-  const nextDraft = { ...uiState.businessDraft, [field]: value };
-  updateUiState({
-    businessDraft: nextDraft,
-    businessDirty: !draftEqualsSaved(uiState.businessSaved, nextDraft),
-    settingsSavedNotice: false,
-    settingsError: null,
   });
   renderSettingsPanel();
 }
@@ -628,6 +648,13 @@ async function handleLogoSelected(file) {
   renderSettingsPanel();
 }
 
+function openArchivePanel() {
+  updateUiState({ archiveOpen: true, deleteConfirmOpen: false, deleteTargetRenterId: null, deleteConfirmText: '' });
+  menuPopover.classList.remove('open');
+  renderArchivePanel();
+  renderRenters();
+}
+
 function setupEvents() {
   searchInput.addEventListener('input', (event) => {
     updateUiState({ searchText: event.target.value });
@@ -635,26 +662,10 @@ function setupEvents() {
   });
 
   overlayElement.addEventListener('click', () => closeDrawer(drawerElement, overlayElement));
-
   railArchiveButton.addEventListener('click', openArchivePanel);
   menuArchiveButton.addEventListener('click', openArchivePanel);
-  closeArchivePanelButton.addEventListener('click', closeArchivePanel);
 
-  railSettingsButton.addEventListener('click', openSettingsPanel);
-  menuSettingsButton.addEventListener('click', openSettingsPanel);
-  closeSettingsPanelButton.addEventListener('click', closeSettingsPanel);
-
-  Object.entries(settingsFieldMap).forEach(([field, input]) => {
-    input.addEventListener('input', (event) => onBusinessDraftChange(field, event.target.value));
-  });
-
-  saveSettingsButton.addEventListener('click', saveBusinessSettings);
-  cancelSettingsButton.addEventListener('click', cancelBusinessSettings);
-
-  uploadLogoButton.addEventListener('click', () => {
-    logoFileInput.value = '';
-    logoFileInput.click();
-  });
+  menuButton.addEventListener('click', () => menuPopover.classList.toggle('open'));
 
   logoFileInput.addEventListener('change', (event) => {
     const [file] = event.target.files || [];
@@ -680,6 +691,7 @@ function setupEvents() {
     if (event.key === 'Escape') {
       menuPopover.classList.remove('open');
       closeDrawer(drawerElement, overlayElement);
+
       if (getUiState().reminderPopoverOpenForRenterId) {
         updateUiState({ reminderPopoverOpenForRenterId: null });
         renderRenters();
@@ -688,11 +700,8 @@ function setupEvents() {
   });
 }
 
-async function startApp() {
-  await startRenterListeners();
-  await loadBusinessProfileIfNeeded();
+function startApp() {
   startReminderListener();
-  renderSettingsPanel();
   renderRenters();
   setupEvents();
 }
