@@ -47,12 +47,39 @@ export function renderRenterDrawer({
   title.textContent = renter.name;
   title.style.margin = '0';
 
+  const headerActions = document.createElement('div');
+  headerActions.className = 'drawer-header-actions';
+
+  const moreButton = document.createElement('button');
+  moreButton.type = 'button';
+  moreButton.className = 'btn btn-ghost';
+  moreButton.textContent = '⋯';
+
+  const drawerMenu = document.createElement('div');
+  drawerMenu.className = 'drawer-menu-popover';
+
+  const archiveButton = document.createElement('button');
+  archiveButton.type = 'button';
+  archiveButton.className = 'menu-item';
+  archiveButton.textContent = 'Archive renter';
+  archiveButton.addEventListener('click', () => {
+    onArchiveRenter(renter.id);
+  });
+
+  drawerMenu.appendChild(archiveButton);
+
+  moreButton.addEventListener('click', () => {
+    drawerMenu.classList.toggle('open');
+  });
+
   const closeButton = document.createElement('button');
   closeButton.type = 'button';
   closeButton.className = 'btn';
   closeButton.textContent = 'Close';
   closeButton.addEventListener('click', () => closeDrawer(drawerElement, overlayElement));
-  header.append(title, closeButton);
+
+  headerActions.append(moreButton, drawerMenu, closeButton);
+  header.append(title, headerActions);
 
   const body = document.createElement('div');
   body.className = 'drawer-body';

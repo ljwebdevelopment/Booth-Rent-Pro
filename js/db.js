@@ -35,15 +35,26 @@ function notifyReminderListeners() {
 }
 
 export async function fetchRentersForUser(uid) {
-  return { ok: true, uid, renters: [] };
+  return { ok: true, uid, renters: uidRenters(uid).map((renter) => ({ ...renter })) };
 }
 
 export async function saveRenter(uid, renter) {
+  const renters = uidRenters(uid);
+  const existingIndex = renters.findIndex((item) => item.id === renter.id);
+
+  if (existingIndex >= 0) {
+    renters[existingIndex] = { ...renters[existingIndex], ...renter, updatedAt: new Date() };
+  } else {
+    renters.push({ ...renter, status: renter.status || 'active', updatedAt: new Date() });
+  }
+
+  notifyRentersListeners(uid);
   return { ok: true, uid, renter };
 }
 
 export async function fetchLedgerEntries(uid, renterId) {
-  return { ok: true, uid, renterId, entries: [] };
+  const entries = uidLedger(uid).filter((entry) => entry.renterId === renterId);
+  return { ok: true, uid, renterId, entries };
 }
 
 export const events = {
